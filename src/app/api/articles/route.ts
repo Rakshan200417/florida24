@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { processArticleImagesForPublish, convertToWebP } from '@/lib/imageConverter';
+import { sendArticleNewsletterNotification } from '@/lib/newsletterEmailService';
 
 let isArticlesTableEnsured = false;
 
@@ -178,8 +179,11 @@ export async function POST(request: Request) {
       pending_images = [],
       homepage_placement = '',
       targeted_email_distribution = '',
+      targeted_emails = '',
       is_sponsored = false,
     } = body;
+
+    const finalTargetedEmails = targeted_email_distribution || targeted_emails || '';
 
     if (!writer_email || !title) {
       return NextResponse.json(
@@ -235,12 +239,19 @@ export async function POST(request: Request) {
         image_caption,
         image_credit,
         homepage_placement,
-        targeted_email_distribution,
+        finalTargetedEmails,
         is_sponsored,
       ]
     );
 
     const insertedId = result.insertId;
+
+    // Trigger newsletter notification when article is published immediately on create
+    if (status === 'published' && insertedId) {
+      sendArticleNewsletterNotification(insertedId).catch((nErr) => {
+        console.error('[Newsletter] Automatic trigger on article create error:', nErr);
+      });
+    }
 
     if (pending_images && pending_images.length > 0) {
       for (const img of pending_images) {
@@ -325,8 +336,14 @@ export async function PUT(request: Request) {
       pending_images = [],
       homepage_placement,
       targeted_email_distribution,
+      targeted_emails,
       is_sponsored,
     } = body;
+
+    const resolvedTargetedEmails =
+      targeted_email_distribution !== undefined
+        ? targeted_email_distribution
+        : targeted_emails;
 
     if (!id) {
       return NextResponse.json({ error: 'Article ID is required for update' }, { status: 400 });
@@ -401,7 +418,7 @@ export async function PUT(request: Request) {
     if (image_caption !== undefined) { updates.push('image_caption = ?'); values.push(image_caption); }
     if (image_credit !== undefined) { updates.push('image_credit = ?'); values.push(image_credit); }
     if (homepage_placement !== undefined) { updates.push('homepage_placement = ?'); values.push(homepage_placement); }
-    if (targeted_email_distribution !== undefined) { updates.push('targeted_email_distribution = ?'); values.push(targeted_email_distribution); }
+    if (resolvedTargetedEmails !== undefined) { updates.push('targeted_email_distribution = ?'); values.push(resolvedTargetedEmails); }
     if (is_sponsored !== undefined) { updates.push('is_sponsored = ?'); values.push(is_sponsored); }
     updates.push('updated_at = NOW()');
 
@@ -435,6 +452,13 @@ export async function PUT(request: Request) {
           console.warn('[DB] Failed to record pending image:', dbErr);
         }
       }
+    }
+
+    // Trigger automated newsletter email notifications when approved / published
+    if (status === 'published' && id) {
+      sendArticleNewsletterNotification(id).catch((nErr) => {
+        console.error('[Newsletter] Automatic trigger on article publish error:', nErr);
+      });
     }
 
     // Invalidate the cache for the home page and categories so changes show up immediately

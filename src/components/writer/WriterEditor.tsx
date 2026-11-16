@@ -59,6 +59,7 @@ export interface ArticleData {
   homepage_placement?: string;
   is_sponsored?: boolean;
   targeted_emails?: string;
+  targeted_email_distribution?: string;
 }
 
 interface WriterEditorProps {
@@ -184,7 +185,7 @@ export default function WriterEditor({
     initialArticle?.homepage_placement || "None"
   );
   const [targetedEmails, setTargetedEmails] = useState(
-    initialArticle?.targeted_emails || ""
+    initialArticle?.targeted_emails || initialArticle?.targeted_email_distribution || ""
   );
   const [isSponsored, setIsSponsored] = useState(
     !!initialArticle?.is_sponsored
@@ -501,7 +502,7 @@ export default function WriterEditor({
       setTags(initialArticle.tags || []);
       setReadDuration(initialArticle.read_time || "5 min read");
       setHomepagePlacement(initialArticle.homepage_placement || "None");
-      setTargetedEmails(initialArticle.targeted_emails || "");
+      setTargetedEmails(initialArticle.targeted_emails || initialArticle.targeted_email_distribution || "");
       setIsSponsored(!!initialArticle.is_sponsored);
       if (initialArticle.card_summary) {
         setCardSummary(initialArticle.card_summary);
@@ -1275,6 +1276,7 @@ setUploadSuccessMessage(null);
       pending_images: pendingImages,
       homepage_placement: homepagePlacement,
       targeted_emails: targetedEmails,
+      targeted_email_distribution: targetedEmails,
       is_sponsored: isSponsored,
     };
 
