@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { EyeOff, Eye, ArrowLeft } from "lucide-react";
 
 export default function SignupForm() {
@@ -16,6 +16,14 @@ export default function SignupForm() {
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlError = params.get("error");
+      if (urlError) setError(decodeURIComponent(urlError));
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -231,7 +239,10 @@ export default function SignupForm() {
             {/* Google Sign Up Button */}
             <button
               type="button"
-              className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 px-4 text-xs rounded-sm transition-colors flex items-center justify-center gap-2.5 shadow-sm"
+              onClick={() => {
+                window.location.href = "/api/auth/google";
+              }}
+              className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 px-4 text-xs rounded-sm transition-colors flex items-center justify-center gap-2.5 shadow-sm active:scale-[0.99] cursor-pointer"
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-4 h-4 flex-shrink-0">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />

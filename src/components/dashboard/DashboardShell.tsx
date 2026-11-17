@@ -127,20 +127,15 @@ export default function DashboardShell({
         <div>
           {/* Sidebar Brand Header */}
           <div className="h-16 lg:h-20 px-6 lg:px-7 border-b border-gray-800 flex items-center justify-between">
-            <a href="/" className="flex items-center gap-3" aria-label="Florida 24 Home">
+            <a href="/" className="flex items-center gap-2.5" aria-label="Florida 24 Home">
               <img
-                src="/icon.png"
+                src="/images/footer-logo.svg"
                 alt="Florida 24"
-                className="w-9 h-9 rounded-xl object-contain shadow-sm select-none"
+                className="h-7 sm:h-8 w-auto object-contain select-none"
               />
-              <div className="flex flex-col">
-                <span className="font-black text-lg tracking-tight text-white leading-none">
-                  Florida 24
-                </span>
-                <span className="text-[10px] font-bold text-[#fccc0d] tracking-wider uppercase mt-1">
-                  {portalBadge}
-                </span>
-              </div>
+              <span className="text-[9px] font-bold text-[#fccc0d] bg-[#fccc0d]/10 border border-[#fccc0d]/30 px-2 py-0.5 rounded tracking-wider uppercase">
+                {portalBadge}
+              </span>
             </a>
 
             <button

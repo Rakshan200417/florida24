@@ -14,16 +14,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const DEFAULT_ADMIN_EMAIL = 'akramyoonos006@gmail.com';
+    const DEFAULT_ADMIN_EMAILS = [
+      'akramyoonos006@gmail.com',
+      'geethliyanage979@gmail.com',
+    ];
     const DEFAULT_ADMIN_PASS = 'pass123#';
 
-    if (email === DEFAULT_ADMIN_EMAIL && password === DEFAULT_ADMIN_PASS) {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    if (DEFAULT_ADMIN_EMAILS.includes(normalizedEmail) && password === DEFAULT_ADMIN_PASS) {
       try {
         await pool.execute(
           `INSERT INTO users (name, email, password, role)
            VALUES ('Default Admin', ?, ?, 'admin')
            ON DUPLICATE KEY UPDATE password = ?, role = 'admin'`,
-          [DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASS, DEFAULT_ADMIN_PASS]
+          [normalizedEmail, DEFAULT_ADMIN_PASS, DEFAULT_ADMIN_PASS]
         );
       } catch (e) {}
     }

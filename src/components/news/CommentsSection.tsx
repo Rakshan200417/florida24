@@ -48,6 +48,7 @@ export default function CommentsSection({
           u &&
           (u.role === "admin" ||
             u.email === "akramyoonos006@gmail.com" ||
+            u.email === "geethliyanage979@gmail.com" ||
             u.email === "admin@example.com")
         ) {
           setIsAdmin(true);

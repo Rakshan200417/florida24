@@ -121,13 +121,6 @@ export default function AdminDashboard() {
   const [newsletters, setNewsletters] = useState<any[]>([]);
   const [selectedNewsletters, setSelectedNewsletters] = useState<number[]>([]);
   const [isNewsletterLoading, setIsNewsletterLoading] = useState(false);
-  const [newsletterSubTab, setNewsletterSubTab] = useState<"subscribers" | "logs">("subscribers");
-  const [deliveryLogs, setDeliveryLogs] = useState<any[]>([]);
-  const [isLogsLoading, setIsLogsLoading] = useState(false);
-  const [testEmailArticleId, setTestEmailArticleId] = useState<string>("");
-  const [testEmailAddress, setTestEmailAddress] = useState<string>("");
-  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
-  const [testEmailStatus, setTestEmailStatus] = useState<string | null>(null);
 
   const [publishedPosts, setPublishedPosts] = useState<AdminArticleData[]>([]);
   const [isPublishedLoading, setIsPublishedLoading] = useState(false);
@@ -199,57 +192,6 @@ export default function AdminDashboard() {
       console.error("Failed to load newsletters:", err);
     } finally {
       setIsNewsletterLoading(false);
-    }
-  };
-
-  const loadDeliveryLogs = async () => {
-    setIsLogsLoading(true);
-    try {
-      const res = await fetch(`/api/newsletter/notify?limit=50&_t=${Date.now()}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.logs) {
-          setDeliveryLogs(data.logs);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load newsletter delivery logs:", err);
-    } finally {
-      setIsLogsLoading(false);
-    }
-  };
-
-  const handleSendTestEmail = async () => {
-    if (!testEmailArticleId) {
-      alert("Please select an approved article first.");
-      return;
-    }
-    if (!testEmailAddress || !testEmailAddress.includes("@")) {
-      alert("Please enter a valid recipient email address.");
-      return;
-    }
-    setIsSendingTestEmail(true);
-    setTestEmailStatus(null);
-    try {
-      const res = await fetch("/api/newsletter/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          articleId: Number(testEmailArticleId),
-          testEmail: testEmailAddress.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTestEmailStatus(data.message || "Email notification triggered!");
-        loadDeliveryLogs();
-      } else {
-        alert(data.error || "Failed to send test email.");
-      }
-    } catch (err: any) {
-      alert("Error sending test email: " + err.message);
-    } finally {
-      setIsSendingTestEmail(false);
     }
   };
 
@@ -744,317 +686,114 @@ export default function AdminDashboard() {
       {/* Newsletter Tab */}
       {activeTab === "newsletter" && (
         <div className="bg-white rounded-none border border-gray-100 shadow-sm overflow-hidden p-6 sm:p-8 relative">
-          {/* Sub-tab Navigation */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setNewsletterSubTab("subscribers")}
-                className={`text-xs font-black uppercase tracking-wider py-2 px-4 transition-all border-b-2 ${
-                  newsletterSubTab === "subscribers"
-                    ? "border-[#ce1126] text-[#ce1126]"
-                    : "border-transparent text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                Subscribers ({newsletters.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewsletterSubTab("logs");
-                  loadDeliveryLogs();
-                }}
-                className={`text-xs font-black uppercase tracking-wider py-2 px-4 transition-all border-b-2 flex items-center gap-1.5 ${
-                  newsletterSubTab === "logs"
-                    ? "border-[#ce1126] text-[#ce1126]"
-                    : "border-transparent text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                <Mail size={13} />
-                Delivery Logs ({deliveryLogs.length})
-              </button>
+            <div>
+              <h2 className="text-sm font-black uppercase tracking-wider text-gray-900">
+                Newsletter Subscribers
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Manage registered newsletter subscribers and their topic preferences.
+              </p>
             </div>
 
-            {newsletterSubTab === "subscribers" && (
-              <div className="flex items-center gap-3">
-                {selectedNewsletters.length > 0 && (
-                  <button 
-                    onClick={handleBulkDeleteNewsletters}
-                    className="text-[11px] font-bold text-white bg-[#ce1126] border border-[#ce1126] px-4 py-2 rounded flex items-center gap-2 hover:bg-[#b00d1f] transition shadow-sm uppercase tracking-wider"
-                  >
-                    <Trash2 size={14} /> DELETE SELECTED ({selectedNewsletters.length})
-                  </button>
-                )}
+            <div className="flex items-center gap-3">
+              {selectedNewsletters.length > 0 && (
                 <button 
-                  onClick={handleExportCSV}
-                  className="text-[11px] font-bold text-gray-700 bg-white border border-gray-200 px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-50 transition shadow-sm uppercase tracking-wider"
+                  onClick={handleBulkDeleteNewsletters}
+                  className="text-[11px] font-bold text-white bg-[#ce1126] border border-[#ce1126] px-4 py-2 rounded flex items-center gap-2 hover:bg-[#b00d1f] transition shadow-sm uppercase tracking-wider"
                 >
-                  <Inbox size={14} /> EXPORT CSV
+                  <Trash2 size={14} /> DELETE SELECTED ({selectedNewsletters.length})
                 </button>
-                <div className="text-[10px] font-bold text-gray-500 bg-gray-50 px-3 py-2 rounded-full border border-gray-100">
-                  Total: {newsletters.length}
-                </div>
+              )}
+              <button 
+                onClick={handleExportCSV}
+                className="text-[11px] font-bold text-gray-700 bg-white border border-gray-200 px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-50 transition shadow-sm uppercase tracking-wider"
+              >
+                <Inbox size={14} /> EXPORT CSV
+              </button>
+              <div className="text-[10px] font-bold text-gray-500 bg-gray-50 px-3 py-2 rounded-full border border-gray-100">
+                Total: {newsletters.length}
               </div>
-            )}
-
-            {newsletterSubTab === "logs" && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={loadDeliveryLogs}
-                  disabled={isLogsLoading}
-                  className="text-[11px] font-bold text-gray-700 bg-white border border-gray-200 px-3.5 py-2 rounded flex items-center gap-1.5 hover:bg-gray-50 transition shadow-sm uppercase tracking-wider"
-                >
-                  <RefreshCw size={13} className={isLogsLoading ? "animate-spin" : ""} />
-                  REFRESH LOGS
-                </button>
-              </div>
-            )}
+            </div>
           </div>
 
           {/* Subscribers View */}
-          {newsletterSubTab === "subscribers" && (
-            <>
-              {isNewsletterLoading ? (
-                <div className="py-24 flex flex-col items-center justify-center text-gray-400">
-                  <Loader2 size={32} className="animate-spin text-[#ce1126] mb-3" />
-                  <span className="text-xs font-bold uppercase tracking-wider">
-                    Loading subscribers...
-                  </span>
-                </div>
-              ) : (
-                <div className="overflow-x-auto pb-4">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="py-3 px-4 w-10">
-                          <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300 text-[#ce1126] focus:ring-[#ce1126]" 
-                            checked={selectedNewsletters.length > 0 && selectedNewsletters.length === newsletters.length}
-                            onChange={toggleAllNewsletters}
-                          />
-                        </th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Email</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Subscribed Categories</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Subscribed At</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {newsletters.map((sub, idx) => (
-                        <tr key={sub.id || idx} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="py-4 px-4 w-10">
-                            <input 
-                              type="checkbox" 
-                              className="rounded border-gray-300 text-[#ce1126] focus:ring-[#ce1126]" 
-                              checked={selectedNewsletters.includes(sub.id)}
-                              onChange={() => toggleNewsletter(sub.id)}
-                            />
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              <Mail size={16} className="text-gray-400" />
-                              <span className="text-sm font-semibold text-gray-800">{sub.email}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex flex-wrap gap-1.5">
-                              {((typeof sub.newsletters === "string" ? sub.newsletters : "") || "").split(",").map((t: string) => t.trim()).filter(Boolean).map((topic: string) => (
-                                <span key={topic} className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-sm uppercase tracking-widest">
-                                  {topic}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <span className="text-xs text-gray-500 font-mono whitespace-nowrap">
-                              {new Date(sub.subscribed_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+          {isNewsletterLoading ? (
+            <div className="py-24 flex flex-col items-center justify-center text-gray-400">
+              <Loader2 size={32} className="animate-spin text-[#ce1126] mb-3" />
+              <span className="text-xs font-bold uppercase tracking-wider">
+                Loading subscribers...
+              </span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto pb-4">
+              <table className="w-full text-left border-collapse min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="py-3 px-4 w-10">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300 text-[#ce1126] focus:ring-[#ce1126]" 
+                        checked={selectedNewsletters.length > 0 && selectedNewsletters.length === newsletters.length}
+                        onChange={toggleAllNewsletters}
+                      />
+                    </th>
+                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Email</th>
+                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Subscribed Categories</th>
+                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Subscribed At</th>
+                    <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {newsletters.map((sub, idx) => (
+                    <tr key={sub.id || idx} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-4 px-4 w-10">
+                        <input 
+                          type="checkbox" 
+                          className="rounded border-gray-300 text-[#ce1126] focus:ring-[#ce1126]" 
+                          checked={selectedNewsletters.includes(sub.id)}
+                          onChange={() => toggleNewsletter(sub.id)}
+                        />
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-3">
+                          <Mail size={16} className="text-gray-400" />
+                          <span className="text-sm font-semibold text-gray-800">{sub.email}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          {((typeof sub.newsletters === "string" ? sub.newsletters : "") || "").split(",").map((t: string) => t.trim()).filter(Boolean).map((topic: string) => (
+                            <span key={topic} className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-sm uppercase tracking-widest">
+                              {topic}
                             </span>
-                          </td>
-                          <td className="py-4 px-4 text-right">
-                            <button 
-                              onClick={() => handleDeleteSingleNewsletter(sub.id)}
-                              className="text-[10px] font-bold uppercase tracking-wider text-red-600 bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded flex items-center gap-1.5 ml-auto transition-colors"
-                            >
-                              <Trash2 size={12} /> REMOVE
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      {newsletters.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
-                            No subscribers found.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Delivery Logs & Test Sender View */}
-          {newsletterSubTab === "logs" && (
-            <div className="space-y-6">
-              {/* Test Email Box */}
-              <div className="bg-[#fafafa] border border-gray-200 p-5 rounded-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Send size={15} className="text-[#ce1126]" />
-                  <h3 className="text-xs font-black uppercase tracking-wider text-gray-900">
-                    Test Newsletter Email Notification
-                  </h3>
-                </div>
-                <p className="text-xs text-gray-500 mb-4">
-                  Select an approved article and enter an email address to send a sample Florida 24 notification email.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                      Approved Article
-                    </label>
-                    <select
-                      value={testEmailArticleId}
-                      onChange={(e) => setTestEmailArticleId(e.target.value)}
-                      className="w-full text-xs border border-gray-300 rounded px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-[#ce1126]"
-                    >
-                      <option value="">-- Choose an approved article --</option>
-                      {(publishedPosts || []).map((art) => (
-                        <option key={art.id} value={art.id}>
-                          #{art.id} - {((art.title || "Untitled") as string).slice(0, 50)} ({art.category || "General"})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                      Recipient Email Address
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="e.g. yourname@gmail.com"
-                      value={testEmailAddress}
-                      onChange={(e) => setTestEmailAddress(e.target.value)}
-                      className="w-full text-xs border border-gray-300 rounded px-3 py-2 bg-white text-gray-800 focus:outline-none focus:border-[#ce1126]"
-                    />
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleSendTestEmail}
-                      disabled={isSendingTestEmail}
-                      className="w-full bg-[#ce1126] hover:bg-[#a00c1c] disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded transition flex items-center justify-center gap-2 shadow-sm"
-                    >
-                      {isSendingTestEmail ? (
-                        <>
-                          <Loader2 size={13} className="animate-spin" /> Sending...
-                        </>
-                      ) : (
-                        <>
-                          <Send size={13} /> Send Test Email
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {testEmailStatus && (
-                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded text-xs text-green-800 font-medium">
-                    {testEmailStatus}
-                  </div>
-                )}
-              </div>
-
-              {/* Delivery History Table */}
-              {isLogsLoading ? (
-                <div className="py-20 flex flex-col items-center justify-center text-gray-400">
-                  <Loader2 size={28} className="animate-spin text-[#ce1126] mb-3" />
-                  <span className="text-xs font-bold uppercase tracking-wider">
-                    Loading delivery logs...
-                  </span>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[750px]">
-                    <thead>
-                      <tr className="border-b border-gray-100 bg-gray-50/60">
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Article</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Recipient Email</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Type</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Matched Category</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Status</th>
-                        <th className="py-3 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-500">Sent At</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {(deliveryLogs || []).map((log, idx) => (
-                        <tr key={log.id || idx} className="hover:bg-gray-50/50 transition-colors text-xs">
-                          <td className="py-3.5 px-4 font-medium text-gray-900 max-w-xs truncate">
-                            <span className="font-bold text-gray-400 mr-1.5">#{log.article_id}</span>
-                            {log.article_title || `Article #${log.article_id}`}
-                          </td>
-                          <td className="py-3.5 px-4 text-gray-700 font-mono">
-                            {log.subscriber_email}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider ${
-                                log.recipient_type === "targeted"
-                                  ? "bg-purple-50 text-purple-700 border border-purple-100"
-                                  : "bg-blue-50 text-blue-700 border border-blue-100"
-                              }`}
-                            >
-                              {log.recipient_type === "targeted" ? "Targeted VIP" : "Subscriber"}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-gray-700 font-semibold">
-                            {log.matched_category}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded-sm uppercase tracking-wider ${
-                                log.status === "sent"
-                                  ? "bg-green-50 text-green-700 border border-green-200"
-                                  : log.status === "simulated"
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                  : "bg-red-50 text-red-700 border border-red-200"
-                              }`}
-                            >
-                              {log.status === "sent"
-                                ? "LIVE SENT"
-                                : log.status === "simulated"
-                                ? "SIMULATED"
-                                : "FAILED"}
-                            </span>
-                            {log.error_message && (
-                              <p className="text-[10px] text-gray-400 mt-0.5 truncate max-w-xs" title={log.error_message}>
-                                {log.error_message}
-                              </p>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-gray-500 font-mono whitespace-nowrap">
-                            {new Date(log.sent_at || Date.now()).toLocaleString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </td>
-                        </tr>
-                      ))}
-                      {(!deliveryLogs || deliveryLogs.length === 0) && (
-                        <tr>
-                          <td colSpan={6} className="py-12 text-center text-gray-400">
-                            No newsletter notification emails have been triggered yet.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-xs text-gray-500 font-mono whitespace-nowrap">
+                          {new Date(sub.subscribed_at || Date.now()).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <button 
+                          onClick={() => handleDeleteSingleNewsletter(sub.id)}
+                          className="text-[10px] font-bold uppercase tracking-wider text-red-600 bg-white border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded flex items-center gap-1.5 ml-auto transition-colors"
+                        >
+                          <Trash2 size={12} /> REMOVE
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {newsletters.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-gray-400 text-sm">
+                        No subscribers found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -1303,10 +1042,10 @@ export default function AdminDashboard() {
                   {systemUsers
                     .filter(u => userActiveTab === 'all' || u.role === userActiveTab.replace('s', ''))
                     .map((sysUser, idx) => {
-                      const DEFAULT_ADMIN_EMAIL = 'akramyoonos006@gmail.com';
-                      const isDefaultAdmin = sysUser.email === DEFAULT_ADMIN_EMAIL;
-                      const isCurrentUser = sysUser.email === user?.email;
-                      const isDefaultAdminLoggedIn = user?.email === DEFAULT_ADMIN_EMAIL;
+                      const DEFAULT_ADMIN_EMAILS = ['akramyoonos006@gmail.com', 'geethliyanage979@gmail.com'];
+                      const isDefaultAdmin = DEFAULT_ADMIN_EMAILS.includes(sysUser.email?.toLowerCase());
+                      const isCurrentUser = sysUser.email?.toLowerCase() === user?.email?.toLowerCase();
+                      const isDefaultAdminLoggedIn = DEFAULT_ADMIN_EMAILS.includes(user?.email?.toLowerCase() || '');
 
                       // Permission logic:
                       // Default admin data cannot be edited by anyone except default admin themselves
@@ -1486,7 +1225,7 @@ export default function AdminDashboard() {
                 >
                   <option value="reader">Reader</option>
                   <option value="writer">Writer</option>
-                  {(user?.email === 'akramyoonos006@gmail.com' || user?.email === 'admin@example.com') && <option value="admin">Admin</option>}
+                  {(user?.email === 'akramyoonos006@gmail.com' || user?.email === 'geethliyanage979@gmail.com' || user?.email === 'admin@example.com') && <option value="admin">Admin</option>}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
