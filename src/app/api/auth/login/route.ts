@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import bcrypt from 'bcryptjs';
+import { createAuthToken, setAuthCookie, AuthUser } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
@@ -23,19 +25,20 @@ export async function POST(request: Request) {
     const normalizedEmail = (email || '').toLowerCase().trim();
     if (DEFAULT_ADMIN_EMAILS.includes(normalizedEmail) && password === DEFAULT_ADMIN_PASS) {
       try {
+        const hashedDefaultPass = await bcrypt.hash(DEFAULT_ADMIN_PASS, 10);
         await pool.execute(
           `INSERT INTO users (name, email, password, role)
            VALUES ('Default Admin', ?, ?, 'admin')
-           ON DUPLICATE KEY UPDATE password = ?, role = 'admin'`,
-          [normalizedEmail, DEFAULT_ADMIN_PASS, DEFAULT_ADMIN_PASS]
+           ON DUPLICATE KEY UPDATE role = 'admin'`,
+          [normalizedEmail, hashedDefaultPass]
         );
       } catch (e) {}
     }
 
     // Connect to XAMPP MySQL and query the user
     const [rows]: any = await pool.execute(
-      'SELECT * FROM users WHERE email = ? LIMIT 1',
-      [email]
+      'SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1',
+      [normalizedEmail]
     );
 
     if (rows.length === 0) {
@@ -47,9 +50,25 @@ export async function POST(request: Request) {
 
     const user = rows[0];
 
-    // In a production app, you MUST use a library like bcrypt to hash and compare passwords.
-    // For this XAMPP test setup, we compare directly to the 'password' column:
-    const isValid = password === user.password; 
+    // Secure password verification with bcrypt
+    let isValid = false;
+    const isBcryptHash = typeof user.password === 'string' && (user.password.startsWith('$2a$') || user.password.startsWith('$2b$'));
+
+    if (isBcryptHash) {
+      isValid = await bcrypt.compare(password, user.password);
+    } else {
+      // Backward compatibility check for legacy plain-text passwords
+      isValid = (password === user.password);
+      // Seamlessly upgrade legacy password to bcrypt hash on successful login
+      if (isValid) {
+        try {
+          const upgradedHash = await bcrypt.hash(password, 10);
+          await pool.execute('UPDATE users SET password = ? WHERE id = ?', [upgradedHash, user.id]);
+        } catch (upgradeErr) {
+          console.warn('Failed to upgrade legacy password hash:', upgradeErr);
+        }
+      }
+    }
 
     if (!isValid) {
       return NextResponse.json(
@@ -58,17 +77,26 @@ export async function POST(request: Request) {
       );
     }
 
-    // Success! Return user info (excluding password)
-    return NextResponse.json({
+    // Success! Prepare user info and sign session token
+    const safeUser: AuthUser = {
+      id: user.id,
+      name: user.name || user.email.split('@')[0],
+      email: user.email,
+      role: user.role,
+      avatar_url: user.avatar_url || '',
+    };
+
+    const token = createAuthToken(safeUser);
+
+    const response = NextResponse.json({
       message: 'Login successful',
-      user: {
-        id: user.id,
-        name: user.name || user.email.split('@')[0],
-        email: user.email,
-        role: user.role,
-        avatar_url: user.avatar_url || '',
-      }
+      user: safeUser,
     }, { status: 200 });
+
+    // Set signed HttpOnly session cookie
+    setAuthCookie(response, token);
+
+    return response;
 
   } catch (error) {
     console.error('Login Error:', error);

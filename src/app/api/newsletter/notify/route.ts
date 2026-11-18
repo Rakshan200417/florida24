@@ -7,6 +7,7 @@ import {
 } from "@/lib/newsletterEmailService";
 import { resolveParentCategory } from "@/lib/newsletterCategoryService";
 import nodemailer from "nodemailer";
+import { getAuthUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,11 @@ export async function GET(request: Request) {
 // Body: { articleId: number, testEmail?: string }
 export async function POST(request: Request) {
   try {
+    const sessionUser = getAuthUser(request);
+    if (sessionUser && sessionUser.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized: Admin role required to broadcast emails' }, { status: 403 });
+    }
+
     await ensureNewsletterEmailLogsTable();
     const body = await request.json();
     const { articleId, testEmail } = body;

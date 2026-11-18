@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import bcrypt from 'bcryptjs';
+import { getAuthUser } from '@/lib/auth';
 
 const DEFAULT_ADMIN_EMAILS = [
   'akramyoonos006@gmail.com',
@@ -16,13 +18,14 @@ async function ensureDefaultAdmin() {
   try {
     for (const adminEmail of DEFAULT_ADMIN_EMAILS) {
       const [rows]: any = await pool.execute(
-        'SELECT id, role FROM users WHERE LOWER(email) = ?',
+        'SELECT id, role, password FROM users WHERE LOWER(email) = ?',
         [adminEmail]
       );
       if (rows.length === 0) {
+        const hashedPass = await bcrypt.hash(DEFAULT_ADMIN_PASS, 10);
         await pool.execute(
           'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-          ['Default Admin', adminEmail, DEFAULT_ADMIN_PASS, 'admin']
+          ['Default Admin', adminEmail, hashedPass, 'admin']
         );
       } else if (rows[0].role !== 'admin') {
         await pool.execute('UPDATE users SET role = "admin" WHERE id = ?', [rows[0].id]);
@@ -68,14 +71,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
+    // Verify session user or fallback during transition
+    const sessionUser = getAuthUser(request);
+    const effectiveAdminEmail = sessionUser?.email || loggedInEmail;
+
+    if (sessionUser && sessionUser.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized: Admin role required' }, { status: 403 });
+    }
+
     // Only default admin can create another admin
-    if (role === 'admin' && !isDefaultAdmin(loggedInEmail)) {
+    if (role === 'admin' && !isDefaultAdmin(effectiveAdminEmail)) {
       return NextResponse.json({ error: 'Only default admin can create admin users' }, { status: 403 });
     }
 
+    // Hash password with bcrypt before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     await pool.execute(
       'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name || '', email, password, role]
+      [name || '', email, hashedPassword, role]
     );
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -98,6 +112,13 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    const sessionUser = getAuthUser(request);
+    const effectiveAdminEmail = sessionUser?.email || loggedInUserEmail;
+
+    if (sessionUser && sessionUser.role !== 'admin') {
+      return NextResponse.json({ error: 'Unauthorized: Admin role required' }, { status: 403 });
+    }
+
     // Check who we are deleting
     const [userRows]: any = await pool.execute('SELECT email, role FROM users WHERE id = ?', [id]);
     if (userRows.length === 0) {
@@ -111,7 +132,7 @@ export async function DELETE(request: Request) {
     }
 
     // Normal admin can ONLY delete reader and writer
-    if (!isDefaultAdmin(loggedInUserEmail)) {
+    if (!isDefaultAdmin(effectiveAdminEmail)) {
       if (userToDelete.role === 'admin') {
         return NextResponse.json({ error: 'Normal admin can only delete reader and writer accounts' }, { status: 403 });
       }
@@ -134,6 +155,13 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    const sessionUser = getAuthUser(request);
+    const effectiveAdminEmail = sessionUser?.email || loggedInEmail;
+
+    if (sessionUser && sessionUser.role !== 'admin' && sessionUser.id !== id) {
+      return NextResponse.json({ error: 'Unauthorized: Cannot edit other users' }, { status: 403 });
+    }
+
     // Check who we are editing
     const [userRows]: any = await pool.execute('SELECT * FROM users WHERE id = ?', [id]);
     if (userRows.length === 0) {
@@ -143,7 +171,7 @@ export async function PUT(request: Request) {
 
     // No one can edit default admin data except default admin themselves
     const isTargetDefaultAdmin = isDefaultAdmin(userToUpdate.email);
-    if (isTargetDefaultAdmin && !isDefaultAdmin(loggedInEmail)) {
+    if (isTargetDefaultAdmin && !isDefaultAdmin(effectiveAdminEmail)) {
       return NextResponse.json({ error: 'Cannot edit default admin account' }, { status: 403 });
     }
 
@@ -154,8 +182,8 @@ export async function PUT(request: Request) {
     }
 
     // Normal admin can ONLY edit reader and writer data (or their own name/password)
-    if (!isDefaultAdmin(loggedInEmail)) {
-      if (userToUpdate.role === 'admin' && userToUpdate.email !== loggedInEmail) {
+    if (!isDefaultAdmin(effectiveAdminEmail)) {
+      if (userToUpdate.role === 'admin' && userToUpdate.email !== effectiveAdminEmail) {
         return NextResponse.json({ error: 'Normal admin can only edit reader and writer accounts' }, { status: 403 });
       }
       if (newRole === 'admin' && userToUpdate.role !== 'admin') {
@@ -174,11 +202,12 @@ export async function PUT(request: Request) {
 
     const newName = name !== undefined ? name : userToUpdate.name;
 
-    // If password is provided and non-empty, update password as well
+    // If password is provided and non-empty, hash and update password as well
     if (password && password.trim() !== '') {
+      const hashedPassword = await bcrypt.hash(password.trim(), 10);
       await pool.execute(
         'UPDATE users SET name = ?, email = ?, password = ?, role = ? WHERE id = ?',
-        [newName, targetEmail, password, newRole, id]
+        [newName, targetEmail, hashedPassword, newRole, id]
       );
     } else {
       await pool.execute(

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { createAuthToken, AUTH_COOKIE_NAME, AuthUser } from '@/lib/auth';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -183,9 +184,17 @@ export async function GET(request: Request) {
 </body>
 </html>`;
 
+    const sessionToken = createAuthToken(loggedInUser);
+    const isProduction = process.env.NODE_ENV === 'production';
+    const secureFlag = isProduction ? '; Secure' : '';
+    const cookieHeader = `${AUTH_COOKIE_NAME}=${sessionToken}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${7 * 24 * 60 * 60}${secureFlag}`;
+
     return new Response(html, {
       status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Set-Cookie': cookieHeader,
+      },
     });
   } catch (err: any) {
     console.error('Google OAuth callback error:', err);

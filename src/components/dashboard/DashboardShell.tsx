@@ -99,10 +99,12 @@ export default function DashboardShell({
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("user");
-    setUser(null);
-    setDropdownOpen(false);
-    window.location.href = "/";
+    fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+      localStorage.removeItem("user");
+      setUser(null);
+      setDropdownOpen(false);
+      window.location.href = "/";
+    });
   };
 
   const displayName = user?.name || user?.email?.split("@")[0] || "User";

@@ -80,10 +80,12 @@ export default function Header() {
 
   const handleLogout = (e: React.MouseEvent) => {
     e.preventDefault();
-    localStorage.removeItem("user");
-    setUser(null);
-    setProfileMenuOpen(false);
-    window.location.href = "/";
+    fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+      localStorage.removeItem("user");
+      setUser(null);
+      setProfileMenuOpen(false);
+      window.location.href = "/";
+    });
   };
 
   const toggleMobileCategory = (catId: string) => {
