@@ -264,27 +264,27 @@ export default function DatabaseBackups() {
       <div className="bg-white rounded-none border border-gray-100 shadow-sm p-6 sm:p-8">
         
         {/* Header with Title and Action Buttons */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-gray-100">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <h2 className="text-2xl font-black text-gray-950 tracking-tight font-serif flex items-center gap-2">
                 Database Backups & Cloud Restore
               </h2>
-              <span className="text-[10px] font-bold text-[#ce1126] bg-red-50 border border-red-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="text-[9px] font-bold text-[#ce1126] bg-red-50 border border-red-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Backblaze B2
               </span>
             </div>
             <p className="text-xs text-gray-500 font-mono mt-1">
-              Automated and manual database snapshots stored on Backblaze B2.
+              Automated 24-hour and manual database snapshots stored in Backblaze B2 (retaining 5 most recent).
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             {/* Create B2 Backup Button */}
             <button
               onClick={handleCreateB2Backup}
               disabled={isCreatingBackup || isRestoring || isUploading}
-              className="px-4 py-2.5 bg-white border border-[#ce1126] text-[#ce1126] hover:bg-red-50 text-[11px] font-bold uppercase tracking-wider rounded-none flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2.5 bg-white border border-[#ce1126] text-[#ce1126] hover:bg-red-50 text-[11px] font-bold uppercase tracking-wider rounded-none flex items-center gap-2 transition-all shadow-xs disabled:opacity-50 cursor-pointer whitespace-nowrap"
             >
               {isCreatingBackup ? (
                 <>
@@ -303,7 +303,7 @@ export default function DatabaseBackups() {
             <button
               onClick={handleUploadButtonClick}
               disabled={isUploading || isRestoring || isCreatingBackup}
-              className="px-4 py-2.5 bg-[#111111] hover:bg-black text-white text-[11px] font-bold uppercase tracking-wider rounded-none flex items-center gap-2 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 bg-[#111111] hover:bg-black text-white text-[11px] font-bold uppercase tracking-wider rounded-none flex items-center gap-2 transition-all shadow-sm cursor-pointer disabled:opacity-50 whitespace-nowrap"
             >
               {isUploading ? (
                 <>
@@ -323,7 +323,7 @@ export default function DatabaseBackups() {
         {/* Informational Subtext */}
         <div className="mt-4 mb-6">
           <p className="text-xs text-gray-500 leading-relaxed font-sans">
-            Backups are automatically taken every 24 hours. The snapshots include all published articles, media links, admin & writer accounts, subscriber list, ad placements, and contact leads.
+            Backups are automatically taken every 24 hours. The snapshots include all published articles, overview pending review articles, user accounts, subscriber lists, ad placements, and contact leads. When backup count reaches 5, older backups are automatically pruned from Backblaze B2.
           </p>
         </div>
 

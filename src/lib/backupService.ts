@@ -1,5 +1,5 @@
 import pool from '@/lib/db';
-import { uploadToFolder, listFolderFiles } from '@/lib/b2Storage';
+import { uploadToFolder, listFolderFiles, deleteFromB2 } from '@/lib/b2Storage';
 
 export interface BackupResult {
   filename: string;
@@ -14,10 +14,58 @@ declare global {
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const MAX_BACKUP_RETENTION = 5;
+
+/**
+ * Enforces strict backup retention limit on Backblaze B2 (default: 5 backups).
+ * When backup count exceeds maxBackups, the oldest backups are permanently removed
+ * from Backblaze B2 so only the 5 most recent snapshots remain.
+ */
+export async function enforceBackupRetention(maxBackups: number = MAX_BACKUP_RETENTION): Promise<{ deleted: string[]; remaining: number }> {
+  try {
+    const files = await listFolderFiles('database-backups');
+    const validBackups = files.filter(f => f.key && !f.key.endsWith('.bzEmpty'));
+
+    if (validBackups.length <= maxBackups) {
+      return { deleted: [], remaining: validBackups.length };
+    }
+
+    // Sort backups from newest to oldest
+    validBackups.sort((a, b) => {
+      const timeA = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+      const timeB = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+      if (timeB !== timeA) return timeB - timeA;
+      return b.key.localeCompare(a.key);
+    });
+
+    // The items from index maxBackups onwards are the oldest backups
+    const filesToDelete = validBackups.slice(maxBackups);
+    const deletedKeys: string[] = [];
+
+    for (const f of filesToDelete) {
+      try {
+        await deleteFromB2(f.key);
+        deletedKeys.push(f.key);
+        console.log(`[Backup Retention] Deleted old backup from Backblaze B2: ${f.key}`);
+      } catch (delErr) {
+        console.error(`[Backup Retention] Failed to delete old backup ${f.key}:`, delErr);
+      }
+    }
+
+    return {
+      deleted: deletedKeys,
+      remaining: validBackups.length - deletedKeys.length,
+    };
+  } catch (error) {
+    console.error('[Backup Retention] Error checking backup retention:', error);
+    return { deleted: [], remaining: 0 };
+  }
+}
 
 /**
  * Checks if the most recent backup in Backblaze B2 is older than 24 hours.
- * If older (or no backup exists), it automatically creates and uploads a new 24h snapshot.
+ * If older (or no backup exists), it automatically creates and uploads a new 24h snapshot,
+ * then enforces the 5-backup retention limit.
  */
 export async function checkAndRunAutomated24hBackup() {
   const now = Date.now();
@@ -28,21 +76,26 @@ export async function checkAndRunAutomated24hBackup() {
   }
   global._lastAutoBackupCheck = now;
 
+  // Always ensure retention limit is enforced
+  await enforceBackupRetention(MAX_BACKUP_RETENTION);
+
   const files = await listFolderFiles('database-backups');
-  if (files.length === 0) {
+  const validBackups = files.filter(f => f.key && !f.key.endsWith('.bzEmpty'));
+
+  if (validBackups.length === 0) {
     // No backup exists, create first auto backup
     const backup = await createDatabaseBackup('auto_daily');
     return { executed: true, reason: 'No prior backup found. Initial backup created.', backup };
   }
 
   // Sort newest first
-  files.sort((a, b) => {
+  validBackups.sort((a, b) => {
     const timeA = a.lastModified ? new Date(a.lastModified).getTime() : 0;
     const timeB = b.lastModified ? new Date(b.lastModified).getTime() : 0;
     return timeB - timeA;
   });
 
-  const latestFile = files[0];
+  const latestFile = validBackups[0];
   const latestTime = latestFile.lastModified ? new Date(latestFile.lastModified).getTime() : 0;
   const elapsed = now - latestTime;
 
@@ -212,8 +265,52 @@ export async function createDatabaseBackup(prefix: 'manual' | 'auto_daily' = 'ma
     };
   });
 
-  // 4. Submissions (pending/review queue articles or submissions)
-  const formattedSubmissions: any[] = [];
+  // 4. Submissions & Overview Section Articles (Pending review articles from Overview tab)
+  const overviewArticleRows = articleRows.filter((a: any) => (a.status || '').toLowerCase() === 'pending');
+  const formattedOverviewArticles = overviewArticleRows.map((a: any) => {
+    let subCategories: string[] = [];
+    if (a.subcategories) {
+      try {
+        subCategories = typeof a.subcategories === 'string' ? JSON.parse(a.subcategories) : a.subcategories;
+      } catch {
+        subCategories = String(a.subcategories).split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+
+    let tags: string[] = [];
+    if (a.tags) {
+      try {
+        tags = typeof a.tags === 'string' ? JSON.parse(a.tags) : a.tags;
+      } catch {
+        tags = String(a.tags).split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+
+    return {
+      id: `art-${a.id}`,
+      articleId: a.id,
+      title: a.title,
+      subtitle: a.deck || '',
+      category: a.category,
+      subCategories,
+      tags,
+      summary: a.card_summary || a.deck || '',
+      fullContent: a.content || '',
+      image: a.image || '',
+      readTime: a.read_time || '5 min read',
+      author: a.writer_name || '',
+      writerId: a.writer_email || '',
+      status: 'Pending',
+      date: a.created_at
+        ? new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '',
+      submittedDate: a.created_at ? new Date(a.created_at).toISOString() : new Date().toISOString(),
+      homeSection: a.homepage_placement || '',
+      focusKeyword: a.focus_keyword || '',
+      metaDescription: a.meta_description || '',
+      views: a.views || 0,
+    };
+  });
 
   // 5. Format Ads
   const formattedAds = adRows.map((ad: any) => ({
@@ -260,12 +357,13 @@ export async function createDatabaseBackup(prefix: 'manual' | 'auto_daily' = 'ma
     timestamp: new Date().toISOString(),
     type: prefix === 'auto_daily' ? 'automated_24h_snapshot' : 'manual_snapshot',
     database: process.env.DB_NAME || 'Florida24',
-    // 1. Users, 2. Articles, 3. Newsletter, 4. Submissions, 5. Ads, 6. Contact, 7. Advertise leads, 8. Shorts & reels
+    // 1. Users, 2. Articles, 3. Overview section articles, 4. Submissions, 5. Newsletter, 6. Ads, 7. Contact, 8. Advertise leads, 9. Shorts & reels
     data: {
       users: formattedUsers,
       articles: formattedArticles,
+      overview_articles: formattedOverviewArticles,
+      submissions: formattedOverviewArticles,
       newsletter_subscribers: formattedSubscribers,
-      submissions: formattedSubmissions,
       ads: formattedAds,
       contact_messages: formattedContactMessages,
       advertise_leads: formattedAdvertiseLeads,
@@ -277,6 +375,7 @@ export async function createDatabaseBackup(prefix: 'manual' | 'auto_daily' = 'ma
       profile_details: profileRows,
       saved_articles: savedArticleRows,
       articles: articleRows,
+      overview_articles: overviewArticleRows,
       comments: commentRows,
       newsletter_subscribers: subscriberRows,
       ads: adRows,
@@ -295,6 +394,9 @@ export async function createDatabaseBackup(prefix: 'manual' | 'auto_daily' = 'ma
   const filename = `db_backup_${prefix}_${timestampName}.json`;
 
   const uploadedUrl = await uploadToFolder('database-backups', filename, buffer, 'application/json');
+
+  // Enforce the 5-backup limit: remove any older backups from Backblaze B2 so only the 5 newest remain
+  await enforceBackupRetention(MAX_BACKUP_RETENTION);
 
   return {
     filename,

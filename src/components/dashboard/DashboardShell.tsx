@@ -20,7 +20,7 @@ export interface NavItem {
 
 interface DashboardShellProps {
   portalTitle: string;
-  portalBadge: string;
+  portalBadge?: string;
   role: "writer" | "admin";
   navItems: NavItem[];
   activeTab: string;
@@ -135,9 +135,6 @@ export default function DashboardShell({
                 alt="Florida 24"
                 className="h-7 sm:h-8 w-auto object-contain select-none"
               />
-              <span className="text-[9px] font-bold text-[#fccc0d] bg-[#fccc0d]/10 border border-[#fccc0d]/30 px-2 py-0.5 rounded tracking-wider uppercase">
-                {portalBadge}
-              </span>
             </a>
 
             <button

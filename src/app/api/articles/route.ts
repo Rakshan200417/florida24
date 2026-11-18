@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import pool from '@/lib/db';
 import { processArticleImagesForPublish, convertToWebP } from '@/lib/imageConverter';
 import { sendArticleNewsletterNotification } from '@/lib/newsletterEmailService';
+import { checkAndRunAutomated24hBackup } from '@/lib/backupService';
 
 let isArticlesTableEnsured = false;
 
@@ -81,6 +82,9 @@ async function ensureArticlesTable() {
 export async function GET(request: Request) {
   try {
     await ensureArticlesTable();
+
+    // Background 24-hour backup check (throttled in-memory to at most once per 10m)
+    checkAndRunAutomated24hBackup().catch((e) => console.warn('[AutoBackup] 24h check failed:', e));
 
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');

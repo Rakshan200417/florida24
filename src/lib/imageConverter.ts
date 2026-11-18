@@ -36,8 +36,19 @@ export async function convertToWebP(imageUrl: string): Promise<string> {
         const filename = `article_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.webp`;
         const filePath = path.join(articlesDir, filename);
 
-        await sharp(buffer).webp({ quality: 85 }).toFile(filePath);
-        return `/uploads/articles/${filename}`;
+        const webpBuffer = await sharp(buffer).webp({ quality: 85 }).toBuffer();
+        try {
+          await sharp(webpBuffer).toFile(filePath);
+        } catch {}
+
+        try {
+          const { uploadToFolder } = await import('@/lib/b2Storage');
+          const b2Url = await uploadToFolder('articles', filename, webpBuffer, 'image/webp');
+          return b2Url;
+        } catch (b2Err) {
+          console.warn('[imageConverter] Backblaze B2 upload failed for base64, using local fallback:', b2Err);
+          return `/uploads/articles/${filename}`;
+        }
       }
     } catch (err) {
       console.error('[imageConverter] Failed to convert base64 image to webp:', err);
@@ -64,11 +75,19 @@ export async function convertToWebP(imageUrl: string): Promise<string> {
 
       // If the .webp file was already generated (e.g. earlier in the same publish call), return it
       if (fs.existsSync(newDiskPath)) {
-        return newPublicUrl;
+        try {
+          const { uploadToFolder } = await import('@/lib/b2Storage');
+          const webpBuf = fs.readFileSync(newDiskPath);
+          const b2Filename = path.basename(newDiskPath);
+          return await uploadToFolder('articles', b2Filename, webpBuf, 'image/webp');
+        } catch {
+          return newPublicUrl;
+        }
       }
 
       if (fs.existsSync(fullDiskPath)) {
-        await sharp(fullDiskPath).webp({ quality: 85 }).toFile(newDiskPath);
+        const webpBuffer = await sharp(fullDiskPath).webp({ quality: 85 }).toBuffer();
+        await sharp(webpBuffer).toFile(newDiskPath);
 
         // Remove old non-webp file to keep disk tidy
         if (fs.existsSync(fullDiskPath) && fullDiskPath !== newDiskPath) {
@@ -79,7 +98,15 @@ export async function convertToWebP(imageUrl: string): Promise<string> {
           }
         }
 
-        return newPublicUrl;
+        try {
+          const { uploadToFolder } = await import('@/lib/b2Storage');
+          const b2Filename = path.basename(newDiskPath);
+          const b2Url = await uploadToFolder('articles', b2Filename, webpBuffer, 'image/webp');
+          return b2Url;
+        } catch (b2Err) {
+          console.warn('[imageConverter] Backblaze B2 upload failed for local file, using local fallback:', b2Err);
+          return newPublicUrl;
+        }
       }
     } catch (err) {
       console.error('[imageConverter] Failed to convert local file to webp:', err);
@@ -89,6 +116,11 @@ export async function convertToWebP(imageUrl: string): Promise<string> {
 
   // Case 3: External image URL (http:// or https://)
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    // If already hosted on our Backblaze bucket, return as is
+    if (trimmed.includes('backblazeb2.com') && (trimmed.endsWith('.webp') || trimmed.includes('.webp?'))) {
+      return trimmed;
+    }
+
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 7000);
@@ -101,8 +133,19 @@ export async function convertToWebP(imageUrl: string): Promise<string> {
         const filename = `article_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.webp`;
         const filePath = path.join(articlesDir, filename);
 
-        await sharp(buffer).webp({ quality: 85 }).toFile(filePath);
-        return `/uploads/articles/${filename}`;
+        const webpBuffer = await sharp(buffer).webp({ quality: 85 }).toBuffer();
+        try {
+          await sharp(webpBuffer).toFile(filePath);
+        } catch {}
+
+        try {
+          const { uploadToFolder } = await import('@/lib/b2Storage');
+          const b2Url = await uploadToFolder('articles', filename, webpBuffer, 'image/webp');
+          return b2Url;
+        } catch (b2Err) {
+          console.warn('[imageConverter] Backblaze B2 upload failed for external URL, using local fallback:', b2Err);
+          return `/uploads/articles/${filename}`;
+        }
       }
     } catch (err) {
       console.warn('[imageConverter] Could not fetch/convert external image to webp, keeping original URL:', err);

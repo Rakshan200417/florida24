@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { listFolderFiles, deleteFromB2 } from '@/lib/b2Storage';
-import { createDatabaseBackup, checkAndRunAutomated24hBackup } from '@/lib/backupService';
+import { createDatabaseBackup, checkAndRunAutomated24hBackup, enforceBackupRetention } from '@/lib/backupService';
 
 export const runtime = 'nodejs';
 
-// GET: List all database backups stored in Backblaze B2 database-backups/ folder
+// GET: List all database backups stored in Backblaze B2 database-backups/ folder (retains 5 most recent)
 export async function GET() {
   try {
     // Automatically evaluate if 24 hours have elapsed since the last backup
@@ -14,7 +14,15 @@ export async function GET() {
       console.warn('[database-backups] 24h auto-backup check skipped:', checkErr);
     }
 
-    const files = await listFolderFiles('database-backups');
+    // Enforce retention limit: delete any backup beyond the 5 most recent from Backblaze B2
+    try {
+      await enforceBackupRetention(5);
+    } catch (retentionErr) {
+      console.warn('[database-backups] Retention enforcement skipped:', retentionErr);
+    }
+
+    const rawFiles = await listFolderFiles('database-backups');
+    const files = rawFiles.filter(f => f.key && !f.key.endsWith('.bzEmpty'));
 
     // Sort backups from newest to oldest by lastModified or timestamp in filename
     files.sort((a, b) => {
@@ -24,7 +32,10 @@ export async function GET() {
       return b.key.localeCompare(a.key);
     });
 
-    const backups = files.map((file, idx) => {
+    // Enforce maximum 5 backups in the response
+    const activeBackups = files.slice(0, 5);
+
+    const backups = activeBackups.map((file, idx) => {
       const parts = file.key.split('/');
       const filename = parts[parts.length - 1];
       const sizeMB = (file.size / (1024 * 1024)).toFixed(2);

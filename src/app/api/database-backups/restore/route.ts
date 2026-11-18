@@ -263,6 +263,37 @@ export async function POST(request: Request) {
         restoredTables.push(`articles (${data.articles.length} records)`);
       }
 
+      // 2b. Restore Overview Section Articles (pending review submissions) if provided
+      const overviewList = Array.isArray(data.overview_articles) && data.overview_articles.length > 0
+        ? data.overview_articles
+        : (Array.isArray(data.submissions) ? data.submissions : []);
+
+      if (overviewList.length > 0) {
+        let restoredOverviewCount = 0;
+        for (const o of overviewList) {
+          const artNumId = parseInt(String(o.articleId || o.id || '').replace(/^art-|^sub-/, ''), 10);
+          const slug = (o.title || 'pending-article')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/(^-|-$)+/g, '') || `pending-${artNumId || Date.now()}`;
+
+          if (!isNaN(artNumId) && artNumId > 0) {
+            const [exists]: any = await connection.query('SELECT id FROM `articles` WHERE id = ?', [artNumId]);
+            if (exists.length === 0) {
+              await connection.query(
+                `INSERT INTO \`articles\` (\`id\`, \`writer_email\`, \`writer_name\`, \`title\`, \`slug\`, \`deck\`, \`content\`, \`category\`, \`status\`, \`image\`, \`read_time\`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+                [artNumId, o.writerId || o.writerEmail || '', o.author || '', o.title, slug, o.subtitle || '', o.fullContent || '', o.category || 'General', o.image || '', o.readTime || '5 min read']
+              );
+              restoredOverviewCount++;
+            }
+          }
+        }
+        if (restoredOverviewCount > 0) {
+          restoredTables.push(`overview_pending_articles (${restoredOverviewCount} records)`);
+        }
+      }
+
       // 3. Restore Newsletter Subscribers
       if (Array.isArray(data.newsletter_subscribers) && data.newsletter_subscribers.length > 0) {
         await connection.query('TRUNCATE TABLE `newsletter_subscribers`');
